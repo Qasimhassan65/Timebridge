@@ -1,32 +1,30 @@
 "use client";
 
-import { motion } from "framer-motion";
 import HeaderClock from "@/components/HeaderClock";
 import ClientGrid from "@/components/ClientGrid";
-import TimeConverter from "@/components/TimeConverter";
+import TwinClockConverter from "@/components/TimeConverter";
+import { useLocalStorage } from "@/lib/useStorage";
+import { Client } from "@/components/ClientCard";
 
 export default function Home() {
+  const [clients, setClients] = useLocalStorage<Client[]>("timebridge-clients", []);
+
+  const addClient = (newClient: Omit<Client, "id">) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setClients((prev) => [...prev, { ...newClient, id }]);
+  };
+
+  const removeClient = (id: string) => {
+    setClients((prev) => prev.filter((c) => c.id !== id));
+  };
+
   return (
     <div className="relative min-h-screen bg-background text-foreground selection:bg-accent/20 overflow-hidden font-sans">
-      {/* Premium Background Elements */}
+      {/* Optimized Static Background */}
       <div className="fixed inset-0 pointer-events-none select-none overflow-hidden z-0">
-        <div className="absolute inset-0 noise after:absolute after:inset-0 after:bg-linear-to-t after:from-background after:via-transparent after:to-background" />
-        <motion.div
-          animate={{
-            opacity: [0.1, 0.2, 0.1],
-            scale: [1, 1.1, 1],
-          }}
-          transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-accent/10 blur-[120px]"
-        />
-        <motion.div
-          animate={{
-            opacity: [0.05, 0.15, 0.05],
-            scale: [1.2, 1, 1.2],
-          }}
-          transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute -bottom-[20%] -right-[10%] w-[60%] h-[60%] rounded-full bg-accent/5 blur-[120px]"
-        />
+        <div className="absolute inset-0 noise opacity-5 after:absolute after:inset-0 after:bg-linear-to-t after:from-background after:via-transparent after:to-background" />
+        <div className="absolute -top-[10%] -left-[5%] w-[50%] h-[50%] rounded-full bg-accent/5 blur-[100px]" />
+        <div className="absolute -bottom-[10%] -right-[5%] w-[40%] h-[40%] rounded-full bg-accent/2 blur-[100px]" />
       </div>
 
       <div className="relative z-10 mx-auto max-w-4xl px-8 lg:px-12">
@@ -34,11 +32,11 @@ export default function Home() {
 
         <main className="space-y-32 pb-40">
           <section id="clients">
-            <ClientGrid />
+            <ClientGrid clients={clients} onAdd={addClient} onRemove={removeClient} />
           </section>
 
           <section id="converter">
-            <TimeConverter />
+            <TwinClockConverter clients={clients} />
           </section>
         </main>
 

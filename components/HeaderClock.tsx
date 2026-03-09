@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { DateTime } from "luxon";
-import { motion } from "framer-motion";
 
 export default function HeaderClock() {
   const [time, setTime] = useState<DateTime | null>(null);
@@ -25,22 +24,22 @@ export default function HeaderClock() {
 
   return (
     <header className="flex flex-col items-center justify-center py-20 sm:py-32 text-center select-none relative">
-      <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="absolute top-6 left-0 sm:top-10 flex items-center gap-3">
-        <div className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse shadow-[0_0_10px_#22c55e]" />
+      <div className="absolute top-6 left-0 sm:top-10 flex items-center gap-3">
+        <div className="w-1.5 h-1.5 rounded-full bg-accent opacity-50 shadow-[0_0_10px_#22c55e]" />
         <span className="text-[10px] font-bold uppercase tracking-[0.4em] text-white/40">TimeBridge</span>
-      </motion.div>
+      </div>
 
       <div className="space-y-4 sm:space-y-8 w-full">
         <label className="text-[10px] sm:text-[11px] font-bold text-muted-text uppercase tracking-[0.3em] opacity-40">Local Clock</label>
 
         <div className="relative group flex flex-col items-center">
-          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex items-center justify-center w-full">
+          <div className="flex items-center justify-center w-full">
             <h1 className="text-[18vw] sm:text-[10rem] lg:text-[12rem] font-medium tracking-tighter text-white tabular-nums leading-none flex items-baseline">
               {time.toFormat("HH:mm")}
               <span className="text-[4vw] sm:text-4xl lg:text-5xl text-accent font-bold align-top ml-1 sm:ml-2">.</span>
               <span className="text-[6vw] sm:text-5xl lg:text-6xl text-white/20 font-light ml-1">{time.toFormat("ss")}</span>
             </h1>
-          </motion.div>
+          </div>
 
           <div className="mt-8 sm:mt-12 flex flex-col items-center gap-4">
             <span className="text-sm sm:text-base font-medium text-white/80 tracking-wide">{time.toFormat("cccc, d MMMM yyyy")}</span>

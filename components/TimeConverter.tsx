@@ -95,8 +95,11 @@ function ClockPanel({ label, type, time, timezone, name, location, isActive, onT
   );
 }
 
-export default function TwinClockConverter() {
-  const [clients] = useLocalStorage<Client[]>("timebridge-clients", []);
+interface TwinClockConverterProps {
+  clients: Client[];
+}
+
+export default function TwinClockConverter({ clients }: TwinClockConverterProps) {
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [manualTimezone, setManualTimezone] = useState<string>("");
 
