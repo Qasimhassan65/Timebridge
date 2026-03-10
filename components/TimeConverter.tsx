@@ -180,7 +180,7 @@ export default function TwinClockConverter({ clients }: TwinClockConverterProps)
                   </motion.div>
                 ) : (
                   <motion.div key="atlas" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
-                    <CityTimezoneSelect value={manualTimezone} onChange={setManualTimezone} className="h-11 no-border-select" placeholder="Enter city name..." />
+                    <CityTimezoneSelect value={manualTimezone} onChange={setManualTimezone} placeholder="Enter city name..." />
                   </motion.div>
                 )}
               </AnimatePresence>

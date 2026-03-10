@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect } from "react";
-import { Search, ChevronDown, Check, Globe, MapPin, Command, Clock } from "lucide-react";
+import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { Search, Check, Globe, MapPin, Clock, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import cityTimezones from "city-timezones";
@@ -16,55 +16,61 @@ interface CityResult {
 }
 
 interface CityTimezoneSelectProps {
-  value: string; // The timezone ID
+  value: string;
   onChange: (timezone: string, cityData?: CityResult) => void;
   placeholder?: string;
-  className?: string;
 }
 
-export default function CityTimezoneSelect({ value, onChange, placeholder = "Search for a city...", className }: CityTimezoneSelectProps) {
-  const [open, setOpen] = useState(false);
+export default function CityTimezoneSelect({ value, onChange, placeholder = "Search city or timezone..." }: CityTimezoneSelectProps) {
   const [search, setSearch] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dropdownPosition, setDropdownPosition] = useState<"bottom" | "top">("bottom");
+  const listRef = useRef<HTMLDivElement>(null);
 
-  const isMinimal = className?.includes("no-border-select");
+  // ── Derived label for the selected value ──────────────────────────────────
+  const selectedLabel = useMemo(() => {
+    if (!value) return "";
+    try {
+      const dt = DateTime.now().setZone(value);
+      return dt.offsetNameLong ?? value;
+    } catch {
+      return value;
+    }
+  }, [value]);
 
-  const filteredCities = useMemo(() => {
-    if (!search || search.length < 2) return [];
-
-    const cityMatches = cityTimezones.findFromCityStateProvince(search);
-    const seen = new Set();
-    const uniqueMatches: CityResult[] = [];
-
-    for (const match of cityMatches) {
-      const key = `${match.city}-${match.country}-${match.timezone}`;
+  // ── City search ───────────────────────────────────────────────────────────
+  const results = useMemo(() => {
+    if (search.length < 2) return [];
+    const matches = cityTimezones.findFromCityStateProvince(search);
+    const seen = new Set<string>();
+    const unique: CityResult[] = [];
+    for (const m of matches) {
+      const key = `${m.city}|${m.country}|${m.timezone}`;
       if (!seen.has(key)) {
         seen.add(key);
-        uniqueMatches.push({
-          city: match.city,
-          country: match.iso2 || match.country,
-          timezone: match.timezone,
-          iso2: match.iso2,
-          province: match.province,
+        unique.push({
+          city: m.city,
+          country: m.country,
+          timezone: m.timezone,
+          iso2: m.iso2,
+          province: m.province,
         });
       }
-      if (uniqueMatches.length >= 12) break;
+      if (unique.length >= 10) break;
     }
-
-    return uniqueMatches;
+    return unique;
   }, [search]);
 
   const getFriendlyTz = (tz: string) => {
     try {
-      const dt = DateTime.now().setZone(tz);
-      return dt.offsetNameLong || tz;
+      return DateTime.now().setZone(tz).offsetNameLong ?? tz;
     } catch {
       return tz;
     }
   };
 
-  const getTimeInTz = (tz: string) => {
+  const getCurrentTime = (tz: string) => {
     try {
       return DateTime.now().setZone(tz).toFormat("h:mm a");
     } catch {
@@ -72,142 +78,150 @@ export default function CityTimezoneSelect({ value, onChange, placeholder = "Sea
     }
   };
 
+  // ── Close on outside click ────────────────────────────────────────────────
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
       }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  // ── Prevent dropdown scroll from propagating to page ─────────────────────
   useEffect(() => {
-    if (open && containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
+    const el = listRef.current;
+    if (!el) return;
+    const stop = (e: WheelEvent) => e.stopPropagation();
+    el.addEventListener("wheel", stop, { passive: true });
+    return () => el.removeEventListener("wheel", stop);
+  }, [isOpen]);
 
-      if (spaceBelow < 400 && spaceAbove > spaceBelow) {
-        setDropdownPosition("top");
-      } else {
-        setDropdownPosition("bottom");
-      }
-    }
-  }, [open]);
+  const handleSelect = useCallback(
+    (city: CityResult) => {
+      onChange(city.timezone, city);
+      setSearch("");
+      setIsOpen(false);
+    },
+    [onChange],
+  );
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange("", undefined);
+    setSearch("");
+    setIsOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
+
+  const openSearch = () => {
+    setIsOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  };
 
   return (
-    <div className={cn("relative", className)} ref={containerRef}>
-      <button type="button" role="combobox" aria-expanded={open} onClick={() => setOpen(!open)} className={cn("flex h-full w-full items-center justify-between transition-all duration-300 font-medium outline-none group", isMinimal ? "border-b border-white/10 bg-transparent px-0 py-4 text-xl sm:text-2xl hover:border-accent" : "rounded-2xl border border-border bg-surface-secondary px-6 py-3 hover:bg-surface focus:ring-2 focus:ring-accent/50", "text-white")}>
-        <div className="flex items-center gap-4 overflow-hidden">
-          <div className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-colors shrink-0", value ? "bg-accent/10 text-accent" : "bg-white/5 text-muted-text opacity-40")}>
-            <Globe size={16} />
-          </div>
-          <div className="flex flex-col items-start truncate text-left">
-            {value ? (
-              <>
-                <span className="text-sm font-bold text-white tracking-tight">{value}</span>
-                <span className="text-[10px] text-muted-text uppercase tracking-widest font-black opacity-30">Selected Location</span>
-              </>
-            ) : (
-              <span className="text-white/20 font-medium transition-colors group-hover:text-white/40">{placeholder}</span>
-            )}
-          </div>
-        </div>
-        <ChevronDown size={isMinimal ? 20 : 16} className={cn("text-muted-text transition-transform duration-500 opacity-20 group-hover:opacity-100", open && "rotate-180")} />
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div initial={{ opacity: 0, y: dropdownPosition === "bottom" ? 4 : -4, scale: 0.99 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: dropdownPosition === "bottom" ? 4 : -4, scale: 0.99 }} className={cn("absolute z-50 w-full sm:w-[140%] sm:-left-[20%] max-h-[420px] overflow-hidden rounded-[32px] border border-white/10 bg-[#0A0A0A]/95 shadow-[0_32px_80px_-16px_rgba(0,0,0,1)] backdrop-blur-4xl flex flex-col", dropdownPosition === "bottom" ? "mt-4 top-full" : "mb-4 bottom-full")}>
-            <div className="flex items-center border-b border-white/5 px-8 py-6 bg-white/2">
-              <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center text-accent mr-5 shrink-0">
-                <Search size={24} />
-              </div>
-              <input autoFocus className="flex h-12 w-full bg-transparent text-2xl text-white outline-none placeholder:text-white/5 font-medium tracking-tight" placeholder="Find city or timezone..." value={search} onChange={(e) => setSearch(e.target.value)} />
-              <div className="flex items-center gap-2 pr-2">
-                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/5 shrink-0 group">
-                  <span className="text-[9px] font-black text-muted-text opacity-40 group-hover:opacity-100 transition-opacity uppercase tracking-widest">ESC to close</span>
-                </div>
-              </div>
+    <div ref={containerRef} className="relative w-full">
+      {/* ── Trigger / Selected Display ─────────────────────────────────── */}
+      {!isOpen && (
+        <div className="relative w-full">
+          {/* Main clickable area — div, NOT button, to avoid nesting */}
+          <div role="button" tabIndex={0} onClick={openSearch} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && openSearch()} className={cn("w-full flex items-center gap-4 px-5 py-5 rounded-2xl border transition-all duration-300 cursor-pointer group select-none", value ? "bg-accent/5 border-accent/20 hover:border-accent/40" : "bg-white/3 border-white/8 hover:border-white/15 hover:bg-white/5")}>
+            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors", value ? "bg-accent/15 text-accent" : "bg-white/5 text-white/20")}>
+              <Globe size={18} />
             </div>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth py-4 custom-scrollbar">
-              {filteredCities.length > 0 ? (
-                <div className="px-4 space-y-2">
-                  {filteredCities.map((city, idx) => (
-                    <button
-                      key={`${city.city}-${city.timezone}-${idx}`}
-                      type="button"
-                      onClick={() => {
-                        onChange(city.timezone, city);
-                        setOpen(false);
-                        setSearch("");
-                      }}
-                      className="flex w-full items-center gap-5 px-6 py-5 text-left hover:bg-white/5 rounded-3xl transition-all group relative mx-auto border border-transparent hover:border-white/5"
-                    >
-                      <div className="w-14 h-14 rounded-2xl bg-surface border border-white/5 flex items-center justify-center text-muted-text group-hover:text-accent group-hover:border-accent/40 group-hover:bg-accent/5 transition-all shrink-0">
-                        <MapPin size={22} />
-                      </div>
-                      <div className="flex flex-col flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-lg font-bold text-white group-hover:translate-x-1 transition-transform duration-500 truncate tracking-tight">
-                            {city.city}, {city.country}
-                          </span>
-                          <div className="flex items-center gap-2 bg-accent/10 px-3 py-1 rounded-full opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100">
-                            <Clock size={12} className="text-accent" />
-                            <span className="text-xs tabular-nums font-black text-accent">{getTimeInTz(city.timezone)}</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 mt-1.5 opacity-30">
-                          <span className="text-[11px] font-medium text-muted-text uppercase tracking-[0.2em]">{getFriendlyTz(city.timezone)}</span>
-                          <div className="w-1 h-1 rounded-full bg-white/40" />
-                          <span className="text-[10px] font-bold text-muted-text uppercase tracking-widest">LATAM</span>
-                        </div>
-                      </div>
-                      {value === city.timezone && (
-                        <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-                          <Check size={16} className="text-accent" />
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
+            <div className="flex-1 min-w-0 pr-16">
+              {value ? (
+                <>
+                  <p className="text-sm font-bold text-white truncate leading-tight">{value}</p>
+                  <p className="text-[10px] text-white/30 font-medium mt-0.5 truncate">{selectedLabel}</p>
+                </>
               ) : (
-                <div className="px-10 py-20 text-center select-none">
-                  {search.length < 2 ? (
-                    <div className="space-y-6">
-                      <div className="w-20 h-20 rounded-[32px] bg-accent/5 border border-accent/10 flex items-center justify-center mx-auto relative group">
-                        <div className="absolute inset-0 bg-accent/10 blur-2xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <Globe size={32} className="text-accent opacity-40 relative z-10" />
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em]">Temporal Search</p>
-                        <p className="text-sm text-muted-text opacity-30 font-medium max-w-[200px] mx-auto leading-relaxed">Provide at least two characters to triangulate the city.</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      <div className="w-20 h-20 rounded-[32px] bg-white/5 border border-white/5 flex items-center justify-center mx-auto opacity-20">
-                        <Search size={32} className="text-muted-text" />
-                      </div>
-                      <div className="space-y-2">
-                        <p className="text-xs font-bold text-white/40 uppercase tracking-widest">Signal Lost</p>
-                        <p className="text-sm text-muted-text opacity-30 font-medium max-w-[220px] mx-auto leading-relaxed">We couldn't locate that coordinate. Try an alternate city name.</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <p className="text-white/20 font-medium text-base group-hover:text-white/40 transition-colors">{placeholder}</p>
               )}
             </div>
 
-            <div className="px-8 py-4 border-t border-white/5 bg-white/1 flex items-center justify-between">
-              <span className="text-[9px] font-black text-white/10 uppercase tracking-[0.4em]">Integrated Atlas 4.0</span>
-              <div className="flex gap-2">
-                <div className="w-1 h-1 rounded-full bg-accent animate-pulse" />
-                <div className="w-1 h-1 rounded-full bg-accent animate-pulse delay-75" />
-                <div className="w-1 h-1 rounded-full bg-accent animate-pulse delay-150" />
+            {/* Search icon — non-interactive indicator */}
+            <div className="w-7 h-7 rounded-full flex items-center justify-center bg-white/5 text-white/20 shrink-0">
+              <Search size={13} />
+            </div>
+          </div>
+
+          {/* Clear button — absolutely positioned OUTSIDE the div to avoid any nesting */}
+          {value && (
+            <button type="button" onClick={handleClear} className="absolute right-11 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center bg-white/8 hover:bg-white/15 text-white/30 hover:text-white transition-all z-10">
+              <X size={12} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Inline Search Panel ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div key="search-panel" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2, ease: "easeOut" }} className="w-full rounded-2xl border border-white/10 bg-[#111111] overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.8)]">
+            {/* Search input row — single X button: clears text if typed, or closes panel */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-white/5">
+              <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent shrink-0">
+                <Search size={15} />
               </div>
+              <input ref={inputRef} type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Type a city name…" className="flex-1 bg-transparent text-white text-base font-medium outline-none placeholder:text-white/10" />
+              {/* Single smart X: clears search if there's text, otherwise closes panel */}
+              <button type="button" onClick={() => (search ? setSearch("") : setIsOpen(false))} className="w-7 h-7 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-white/30 hover:text-white transition-all shrink-0">
+                <X size={12} />
+              </button>
+            </div>
+
+            {/* Results list — fixed height, scrolls independently */}
+            <div ref={listRef} className="overflow-y-auto overscroll-contain" style={{ maxHeight: "320px" }}>
+              {results.length > 0 ? (
+                <div className="py-2">
+                  {results.map((city, idx) => (
+                    <button key={`${city.timezone}-${idx}`} type="button" onClick={() => handleSelect(city)} className="w-full flex items-start gap-3 px-4 py-3.5 hover:bg-white/4 transition-colors group text-left">
+                      {/* Pin icon */}
+                      <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-white/20 group-hover:text-accent group-hover:bg-accent/10 group-hover:border-accent/20 transition-all shrink-0 mt-0.5">
+                        <MapPin size={14} />
+                      </div>
+
+                      {/* Main info */}
+                      <div className="flex-1 min-w-0">
+                        {/* City + Country — NO truncation */}
+                        <p className="text-sm font-semibold text-white leading-snug wrap-break-word">
+                          {city.city}, {city.country}
+                        </p>
+                        {/* Timezone long name */}
+                        <p className="text-[11px] text-white/30 font-medium mt-0.5 leading-tight wrap-break-word">{getFriendlyTz(city.timezone)}</p>
+                      </div>
+
+                      {/* Current time — always visible on mobile, not just on hover */}
+                      <div className="flex flex-col items-end shrink-0 gap-1">
+                        <div className="flex items-center gap-1 bg-accent/8 px-2 py-0.5 rounded-full border border-accent/10">
+                          <Clock size={9} className="text-accent" />
+                          <span className="text-[10px] tabular-nums font-bold text-accent">{getCurrentTime(city.timezone)}</span>
+                        </div>
+                        {value === city.timezone && <Check size={12} className="text-accent mt-0.5" />}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : search.length < 2 ? (
+                <div className="py-12 text-center space-y-3 select-none">
+                  <div className="w-12 h-12 rounded-2xl bg-white/3 border border-white/5 flex items-center justify-center mx-auto">
+                    <Globe size={22} className="text-white/15" />
+                  </div>
+                  <p className="text-[11px] font-bold text-white/20 uppercase tracking-widest">Start Typing</p>
+                  <p className="text-xs text-white/15 max-w-[180px] mx-auto leading-relaxed">Enter at least 2 characters to search cities</p>
+                </div>
+              ) : (
+                <div className="py-12 text-center space-y-3 select-none">
+                  <div className="w-12 h-12 rounded-2xl bg-white/3 border border-white/5 flex items-center justify-center mx-auto">
+                    <Search size={22} className="text-white/15" />
+                  </div>
+                  <p className="text-[11px] font-bold text-white/20 uppercase tracking-widest">No Results</p>
+                  <p className="text-xs text-white/15 max-w-[180px] mx-auto leading-relaxed">Try a different city or region name</p>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
